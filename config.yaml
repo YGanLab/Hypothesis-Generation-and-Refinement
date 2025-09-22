@@ -1,0 +1,175 @@
+openai_api_key: ""
+use_api: "" # openai, claude, ...
+llm_temperature:  # The temperature for the LLM model
+dataset_path:  # The path to the dataset file
+top_k_retrived:  # The number of top documents to retrieve for each query
+number_of_rounds:  # The number of rounds to run the experiment
+keyword_extraction:
+  repharse_question:  # If True, the question will be rephrased before keyword extraction
+  model_name: "" # All the models from iEnigma are supported.
+  temperature: # TRY DIFFERENT TEMPERATURE. 0 HAVE BEEN TRIED FOR CLUDE. NEED TO TRY
+  keyword_stargety: "raw" # Subhect to change
+
+document_retrieval:
+  # The maximum results, for each query to be acquired
+  max_results_pubmed: 
+
+  # The constrant on mimium and maximum years
+  min_year: # The minimum year to search for the articles
+  max_year: # The maximum year to search for the articles
+
+  # Define the serch mode to use. Can use inhouse isearch api or pubmed api 
+  search_mode: "" # The method used to search for keywords, can be 'pubmed'
+  fetch_mode: "" # The method used to search for keywords, can be 'pubmed'
+
+  # Parameters using pubmed to search for pmid given keywords
+  search_url: ""
+  fetch_url: ""
+  pubmed_api_key: "" # The pubmed api key to search the keywords and fetch documents
+  pumbed_api_request_interval: 0.001 # Request interval. To deal with the api search_limit. 10/second if have a api_key, 4/second without a api key
+  sort_by_pubmed: "" # The rank that the pubmed api usd to list the results, relevance recomended
+  count_articles_pubmed: True # Show how many results returned from the keywords
+  pumbed_keyword_reduce: False # If can not find the articles from key words, reduce the keyword by 1 word
+
+  # Parameters using pubmed to fetch document using pmids
+  chunk_size_pubmed:  # Number of chunks to get the pmids. Using chunks can make it faster to fetch. Larger than 350 will have error.
+
+reranking: # Currently reranking model is not supported by ienigma
+  reranker_llm_model: "BAAI/bge-reranker-v2.5-gemma2-lightweight" # The reranking model to be used.
+  cache_dir: "" # Location to save the reranking model. If exist llm in the folder, load it
+  topk: 200 # The number of the reranked document to return, using LLM
+  use_llm_reranking: "" # Can be 'llm', 'knn', 'both', or 'sequence' or 'pre_processed'
+  num_documents_knn: 1000 # Subhect to change
+  num_sentences_knn: 100 # Subhect to change
+  minilm_model_name: "sentence-transformers/all-MiniLM-L6-v2"
+
+rag:
+  model_name: "gpt-4o" # The model name for keyword extraction. All the models from iEnigma are supported.
+  temperature_summarize: # The temperature for the summarization model
+  temperature_keywords: # The temperature for the keyword extraction model
+  
+  prompt_summarize: |
+      ** Task: Summarize the research paper abstract in the following three structured ways, ensuring that the summarized content stays true to the original meaning and terminology without rephrasing or interpretation.
+
+        * Direct Hypothesis: Extract and clearly state the research hypothesis as presented in the abstract.
+        * Cause-Effect Structure: Identify the main cause described in the research and its corresponding effect, using the same scientific terms from the abstract.
+        * Problem-Solution-Outcome Structure: Outline the research problem, the proposed solution, and the expected or observed outcome—retaining all original terminology.
+
+      ** The research paper abstract:
+        {documents}
+
+      ** Requirements:
+        1. Each summary must be concise, scientifically accurate, and strictly preserve the original intent and terminology of the abstract.
+        2. The response must be formatted as a JSON dictionary with the following keys:
+          * "Direct Hypothesis": The stated or implied hypothesis from the abstract.
+          * "Cause-Effect": A faithful summary of the causal relationship using the original scientific language.
+          * "Problem-Solution-Outcome": A structured summary of the research problem, proposed solution, and resulting or anticipated outcome, using only terms from the abstract.
+        3. Do not paraphrase or generalize—use the exact scientific terms and expressions from the abstract.
+        4. For summarization using keywords, use only terminology from the abstract.
+
+      ** ** Example Output Format:
+      {{ 
+        "Direct Hypothesis": "Chiral catalysts’ performance evaluation improves by considering reaction difficulty through relative generality and risk metrics.", 
+        "Cause-Effect": "Catalyst evaluation assumes uniform reaction difficulty, affecting catalyst effectiveness assessment. Adjusting for reaction difficulty refines catalyst generality.", 
+        "Problem-Solution-Outcome": "Catalyst evaluation overlooks reaction difficulty, impacting catalyst generality. Introducing relative generality and risk metrics enhances catalyst effectiveness analysis." 
+      }}
+
+  prompt_keywords: |
+    ** Task:
+      1. Extract **chemically relevant search terms** and domain-specific scientific concepts from the structured input below, preserving full contextual meaning.
+      2. Identify not only explicit keywords but also **latent chemistry entities** (such as evaluation metrics, mechanistic roles, or material classes) that are implied or strongly suggested by the context, even if not directly stated.
+      3. Generate a concise structured summary **using only the final set of extracted search terms**.
+
+    ** Input Format:
+      The input consists of:
+        * "Direct Hypothesis": A structured hypothesis describing the research.
+        * "Cause-Effect Structure": A structured description of the primary cause and its effect.
+        * "Problem-Solution-Outcome Structure": A structured outline of the research problem, proposed solution, and expected outcome.
+
+    ** The structured input: 
+      {documents}
+
+    ** Step 1: Extract Searchable Chemical Keywords
+      1. Identify key **chemical-related terms** relevant to:
+        - Catalysts, named reactions, functional materials, mechanistic steps, and experimental conditions.
+        - Evaluation metrics (e.g., enantioselectivity, yield, conversion), functional/mechanistic roles, or material classes, even if only implied.
+      2. Extract both **explicitly stated** and **contextually inferred** chemistry terms or phrases, but only if:
+          - They are **scientifically meaningful** (i.e., not generic or vague).
+          - They would produce **precise results** if used in PubMed or similar literature search.
+          - They are likely to appear in titles, abstracts, or MeSH terms of research papers.
+      3. **Do NOT include** generic or broad phrases (e.g., "reaction difficulty", "performance evaluation", "improved assessment", "risk metric", "general assumption") unless they have a precise chemical context.
+      4. Filter out ambiguous or overly general terms; prefer terms specific to chemical mechanism, material, reaction, or quantifiable property.
+      
+      5. **All extracted keywords must meet the following strict criteria**:
+        - Must be **explicitly present** in the input text.
+        - Must be **scientifically meaningful** (i.e., not vague or generic).
+        - Must be **suitable for PubMed search**, meaning:
+          * Commonly used in titles, abstracts, or MeSH terms.
+          * Likely to yield relevant results if queried via the PubMed API.
+        - **Do NOT include** abstract or overly broad phrases like:
+          * “reaction difficulty”
+          * “corrected performance evaluation”
+          * “improved catalyst assessment”
+          * “uniform assumption”
+
+      Prefer searchable terms such as:
+        * "chiral catalysts", "asymmetric hydrogenation", "palladium catalysis", "stereoselectivity", "metal-organic frameworks", "Diels-Alder reaction", "reaction yield"
+      Avoid vague or poorly indexed terms like:
+        * "performance evaluation", "reaction assumption", "risk metric", "general assessment"
+
+      6. Provide a dictionary with extracted keywords for each structured input section.
+
+    ** Step 2: Generate Summary Using Only Extracted Keywords
+      Using only the extracted keywords, construct:
+      1. Direct Hypothesis – A single sentence representing the research hypothesis.
+      2. Cause-Effect Structure – A sentence using only the extracted keywords to describe primary cause and effect.
+      3. Problem-Solution-Outcome Structure – A sentence summarizing the research problem, solution, and expected outcome.
+
+
+    ** Guidelines:
+      1. Go beyond surface phrases: reason about latent scientific entities (material classes, roles, metrics, or mechanistic steps).
+      2. Do not invent or introduce any terms that are not clearly justified by the context.
+      3. The response must be formatted as a JSON dictionary with the following keys:
+        * "Extracted Keywords": A dictionary containing extracted keywords for each section.
+        * "Generated Summary": A structured summary using only the extracted keywords.
+
+    ** Example Output Format: 
+      {{
+        "Extracted Keywords": {{
+          "Direct Hypothesis": ["chiral catalysts", "reaction difficulty", "generality metrics", "yield", "selectivity"],
+          "Cause-Effect": ["reaction difficulty", "misleading catalyst assessment", "corrected performance evaluation"],
+          "Problem-Solution-Outcome": ["uniform reaction difficulty assumption", "relative generality", "risk metrics", "improved catalyst evaluation"]
+        }},
+        "Generated Summary": {{
+          "Direct Hypothesis": "Chiral catalysts evaluated using generality metrics, considering reaction difficulty, yield, and selectivity.",
+          "Cause-Effect": "Reaction difficulty leads to misleading catalyst assessment; corrected performance evaluation improves accuracy.",
+          "Problem-Solution-Outcome": "Uniform reaction difficulty assumption affects catalyst evaluation; relative generality and risk metrics improve assessment and refine catalyst performance measurement."
+        }}
+      }}
+
+  prompt_final_hypo_selection: |
+    You are tasked with selecting the research hypothesis that best aligns with the research question and demonstrates the highest potential for scientific innovation and impact. Use the refined criteria below to guide your selection:
+
+    1. **Alignment with Research Question**: Assess how directly and effectively the hypothesis addresses the core elements of the research question, ensuring it is relevant and coherent.
+    2. **Empirical Support**: Evaluate the hypothesis's foundation on empirical evidence, emphasizing robust citation of relevant studies and potential for validation through practical experiments.
+    3. **Feasibility**: Examine the clarity and practicality of the proposed methods, considering the availability of resources and techniques, as well as the likelihood of successful implementation.
+    4. **Innovative Potential**: Consider the novelty and potential for breakthroughs, focusing on unique methodologies or combinations that could lead to new discoveries.
+    5. **Impact Potential**: Analyze the hypothesis's potential to deliver transformative insights and advancements, with attention to its broader implications and applications.
+
+    ** Input: **
+    - **Research Question: {bg_question}
+    - **Background Survey: {bg_survey}
+    - **Input Hypotheses: {hypos}
+    - **Accumulated Memory Summary: {memory_summary}
+
+    Evaluate each hypothesis based on these criteria, prioritizing those that utilize insights from the background survey, propose innovative solutions, and demonstrate strong empirical support, clear feasibility, and significant impact potential. Select the hypothesis that aligns most closely with these criteria and exhibits the highest potential for scientific advancement.
+
+    ** Selection Strategy: **
+    - Prioritize hypotheses with compelling empirical evidence and a clear pathway to validation.
+    - Choose hypotheses offering innovative and practical methods that effectively incorporate insights from the background survey.
+    - Ensure the hypothesis is directly relevant to the research question and demonstrates the highest potential for scientific impact and innovation.
+
+    Evaluate based on these criteria, focusing on selecting the hypothesis with the highest score for success and alignment with the research question.
+
+    ** Output Format: **
+    1. <Selected Hypothesis>
